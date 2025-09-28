@@ -26,6 +26,7 @@ struct WindowDimensions: Codable {
 struct A11yResult: Codable {
     var window: WindowDimensions
     var a11y: A11yNode
+    var screenshot: String
 }
 
 
@@ -163,6 +164,42 @@ class A11yExtractor {
         )
     }
     
+    static func captureWindowScreenshotAsBase64(from element: AXUIElement) -> String? {
+        // Use coordinates-based capture with screencapture command
+        guard let dimensions = getWindowDimensions(from: element) else {
+            return nil
+        }
+        
+        return captureWindowByCoordinatesAsBase64(dimensions: dimensions)
+    }
+    
+    static func captureWindowByCoordinatesAsBase64(dimensions: WindowDimensions) -> String? {
+        let tempFile = "/tmp/window_screenshot_\(ProcessInfo.processInfo.processIdentifier).png"
+        
+        // Create region string for screencapture
+        let region = "\(Int(dimensions.x)),\(Int(dimensions.y)),\(Int(dimensions.width)),\(Int(dimensions.height))"
+        
+        let task = Process()
+        task.launchPath = "/usr/sbin/screencapture"
+        task.arguments = ["-R", region, "-x", tempFile]
+        
+        task.launch()
+        task.waitUntilExit()
+        
+        if task.terminationStatus == 0 {
+            // Read the captured file and convert to base64
+            if let imageData = NSData(contentsOfFile: tempFile) {
+                // Clean up temp file
+                try? FileManager.default.removeItem(atPath: tempFile)
+                return imageData.base64EncodedString()
+            }
+        }
+        
+        // Clean up temp file on failure
+        try? FileManager.default.removeItem(atPath: tempFile)
+        return nil
+    }
+    
     static func findWindow(withTitle searchTitle: String) -> AXUIElement? {
         let allWindows = getAllWindows()
         
@@ -263,9 +300,12 @@ func main() {
         exit(1)
     }
     
+    // Capture screenshot as base64
+    let screenshotBase64 = A11yExtractor.captureWindowScreenshotAsBase64(from: window) ?? ""
+    
     // Extract the accessibility tree
     if let tree = A11yExtractor.extractTree(from: window) {
-        let result = A11yResult(window: windowDimensions, a11y: tree)
+        let result = A11yResult(window: windowDimensions, a11y: tree, screenshot: screenshotBase64)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         

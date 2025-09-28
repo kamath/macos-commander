@@ -5,6 +5,7 @@ Extract the accessibility tree from any macOS window as JSON. This tool allows y
 ## Features
 
 - Extract complete accessibility tree from any window
+- **Capture window screenshots** automatically as PNG files
 - Search windows by title (partial match supported)
 - **List all available windows** when target not found
 - **Automatic permission prompts** with System Settings integration
@@ -108,6 +109,7 @@ interface A11yNode {
     "width": 800,
     "height": 600
   },
+  "screenshot": "screenshot.png",
   "a11y": {
     "role": "AXWindow",
     "title": "Documents",
@@ -127,6 +129,14 @@ interface A11yNode {
   }
 }
 ```
+
+## Files Generated
+
+When you run the tool, it creates several files:
+
+- `screenshot.png` - Screenshot of the captured window
+- `{window-name}-a11y-tree.json` - JSON file with window dimensions and accessibility tree
+- `a11y-extractor` - Compiled Swift executable (auto-generated)
 
 ## Troubleshooting
 

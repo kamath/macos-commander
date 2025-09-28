@@ -1,4 +1,10 @@
 {
+  "window": {
+    "height": 1079,
+    "width": 1728,
+    "x": 0,
+    "y": 38
+  },
   "a11y": {
     "children": [
       {
@@ -2321,7 +2327,22 @@
       {
         "children": [
           {
-            "children": [],
+            "children": [
+              {
+                "children": [],
+                "focused": false,
+                "position": [
+                  50,
+                  47
+                ],
+                "role": "AXGroup",
+                "roleDescription": "group",
+                "size": [
+                  14,
+                  16
+                ]
+              }
+            ],
             "focused": false,
             "position": [
               50,
@@ -2377,10 +2398,5 @@
     ],
     "title": "README.md — mono"
   },
-  "window": {
-    "height": 1079,
-    "width": 1728,
-    "x": 0,
-    "y": 38
-  }
+  "screenshot": "screenshot.png"
 }

@@ -31,6 +31,7 @@ interface WindowDimensions {
 interface A11yResult {
   window: WindowDimensions;
   a11y: A11yNode;
+  screenshot: string;
 }
 
 interface WindowInfo {
@@ -259,13 +260,31 @@ async function main() {
     console.log(`Searching for window containing: "${windowName}"...`);
     const result = await getAccessibilityTree(windowName);
     
+    // Save screenshot if available
+    if (result.screenshot && result.screenshot.length > 0) {
+      try {
+        const screenshotBuffer = Buffer.from(result.screenshot, 'base64');
+        await Bun.write("screenshot.png", screenshotBuffer);
+        console.log("Screenshot saved to: screenshot.png");
+      } catch (error) {
+        console.warn("Failed to save screenshot:", error);
+      }
+    }
+    
+    // Create a copy of result without the large base64 screenshot for JSON output
+    const jsonResult = {
+      window: result.window,
+      a11y: result.a11y,
+      screenshot: result.screenshot ? "screenshot.png" : "No screenshot available"
+    };
+    
     // Output the result as formatted JSON
     console.log("\nWindow & Accessibility Tree:");
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(jsonResult, null, 2));
     
     // Optional: Save to file
     const outputFile = `${windowName.toLowerCase().replace(/\s+/g, '-')}-a11y-tree.json`;
-    await Bun.write(outputFile, JSON.stringify(result, null, 2));
+    await Bun.write(outputFile, JSON.stringify(jsonResult, null, 2));
     console.log(`\nResult saved to: ${outputFile}`);
     
   } catch (error: any) {

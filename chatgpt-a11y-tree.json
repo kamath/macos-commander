@@ -1,4 +1,10 @@
 {
+  "window": {
+    "height": 1055,
+    "width": 1280,
+    "x": 1728,
+    "y": -437
+  },
   "a11y": {
     "children": [
       {
@@ -2703,10 +2709,5 @@
     ],
     "title": "ChatGPT"
   },
-  "window": {
-    "height": 1055,
-    "width": 1280,
-    "x": 1728,
-    "y": -437
-  }
+  "screenshot": "screenshot.png"
 }
