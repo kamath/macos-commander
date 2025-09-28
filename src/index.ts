@@ -5,6 +5,7 @@ import {
   findElement,
   clickElement,
   drawBoundingBox,
+  focusWindow,
   type A11yResult,
   type WindowInfo,
   getImageDimensions,
@@ -36,6 +37,16 @@ async function main() {
   
   try {
     console.log(`Searching for window containing: "${windowName}"...`);
+    
+    // Focus the window before processing
+    console.log("Focusing window...");
+    const focusSuccess = await focusWindow(windowName);
+    if (focusSuccess) {
+      console.log("✅ Window focused successfully");
+    } else {
+      console.log("⚠️  Failed to focus window, continuing anyway...");
+    }
+    
     const result = await getAccessibilityTree(windowName);
     
     // Save screenshot if available
@@ -112,8 +123,8 @@ async function main() {
       }
       
       // Uncomment to actually click it:
-      // await clickElement(refreshButton);
-      // console.log("Clicked Refresh button!");
+      await clickElement(refreshButton, result.window);  // Pass window info for coordinate normalization
+      console.log("Clicked Refresh button!");
     } else {
       console.log("Refresh button not found");
     }

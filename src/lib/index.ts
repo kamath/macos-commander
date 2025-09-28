@@ -306,16 +306,63 @@ export function findElement(tree: A11yNode, searchCriteria: Partial<A11yNode>): 
   return matches[0];
 }
 
-export async function clickElement(node: A11yNode): Promise<void> {
+export async function focusWindow(windowTitle: string): Promise<boolean> {
+  const executable = await compileSwiftIfNeeded();
+  
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ["--focus", windowTitle]);
+    
+    let stdout = "";
+    let stderr = "";
+    
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve(false); // Focus failed, but don't throw error
+        return;
+      }
+      
+      try {
+        const result = JSON.parse(stdout);
+        resolve(result.success === true);
+      } catch (error) {
+        resolve(false); // Parsing failed, assume focus failed
+      }
+    });
+  });
+}
+
+export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions): Promise<void> {
   if (!node.position || !node.size) {
     throw new Error("Element must have position and size to be clickable");
   }
   
-  const [x, y] = node.position;
+  // Import the normalization function
+  const { normalizeCoordinatesForClick } = await import('./utils.js');
+  
+  // Normalize coordinates for clicking
+  const [normalizedX, normalizedY] = normalizeCoordinatesForClick(node.position, windowInfo);
   const [width, height] = node.size;
   
-  const centerX = x + width / 2;
-  const centerY = y + height / 2;
+  const centerX = normalizedX + width / 2;
+  const centerY = normalizedY + height / 2;
+  
+  console.log(`Clicking at normalized coordinates: [${centerX}, ${centerY}]`);
+  if (windowInfo) {
+    console.log(`Original coordinates: [${node.position[0]}, ${node.position[1]}]`);
+    console.log(`Window info: position=[${windowInfo.x}, ${windowInfo.y}], size=[${windowInfo.width}, ${windowInfo.height}]`);
+  }
   
   const script = `
     tell application "System Events"
@@ -336,5 +383,6 @@ export {
   getImageDimensions, 
   normalizeCoordinatesToScreenshot,
   normalizeSizeToScreenshot,
+  normalizeCoordinatesForClick,
   type BoundingBoxOptions 
 } from './utils.js';

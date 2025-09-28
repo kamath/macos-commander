@@ -211,6 +211,31 @@ class A11yExtractor {
         
         return nil
     }
+    
+    static func focusWindow(_ element: AXUIElement) -> Bool {
+        // First, try to raise the window using AXRaise action
+        let raiseResult = AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        
+        // Get the process ID directly from the window element
+        var pid: pid_t = 0
+        let pidResult = AXUIElementGetPid(element, &pid)
+        
+        if pidResult == .success {
+            // Get the NSRunningApplication for this process
+            if let runningApp = NSRunningApplication(processIdentifier: pid) {
+                // Activate the application (bring it to front)
+                // Use the newer API without deprecated options
+                let activateResult = runningApp.activate()
+                
+                // Also try to focus the specific window
+                let focusResult = AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+                
+                return activateResult && (raiseResult == .success || focusResult == .success)
+            }
+        }
+        
+        return raiseResult == .success
+    }
 }
 
 func main() {
@@ -234,6 +259,20 @@ func main() {
     }
     
     let windowTitle = arguments[1]
+    
+    // Handle special case for focusing a window
+    if arguments.count > 2 && arguments[1].lowercased() == "--focus" {
+        let focusWindowTitle = arguments[2]
+        
+        guard let window = A11yExtractor.findWindow(withTitle: focusWindowTitle) else {
+            print("{\"success\": false, \"error\": \"Window with title containing '\(focusWindowTitle)' not found\"}")
+            exit(1)
+        }
+        
+        let focusSuccess = A11yExtractor.focusWindow(window)
+        print("{\"success\": \(focusSuccess)}")
+        exit(focusSuccess ? 0 : 1)
+    }
     
     // Handle special case for listing all windows
     if windowTitle.lowercased() == "--list" || windowTitle.lowercased() == "list" {
@@ -292,6 +331,13 @@ func main() {
             print("{\"error\": \"Window with title containing '\(windowTitle)' not found\"}")
         }
         exit(1)
+    }
+    
+    // Focus the window before processing
+    let focusSuccess = A11yExtractor.focusWindow(window)
+    if !focusSuccess {
+        // Continue anyway, but log a warning in the result
+        // We'll add this to the result structure later
     }
     
     // Extract window dimensions
