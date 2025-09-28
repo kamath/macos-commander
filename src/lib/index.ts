@@ -348,15 +348,8 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
     throw new Error("Element must have position and size to be clickable");
   }
   
-  // Import the normalization function
-  const { normalizeCoordinatesForClick } = await import('./utils.js');
-  
-  // Normalize coordinates for clicking
-  const [normalizedX, normalizedY] = normalizeCoordinatesForClick(node.position, windowInfo);
-  const [width, height] = node.size;
-  
-  const centerX = normalizedX + width / 2;
-  const centerY = normalizedY + height / 2;
+  const centerX = node.position[0] + node.size[0] / 2;
+  const centerY = node.position[1] + node.size[1] / 2;
   
   console.log(`Clicking at normalized coordinates: [${centerX}, ${centerY}]`);
   if (windowInfo) {
@@ -383,6 +376,5 @@ export {
   getImageDimensions, 
   normalizeCoordinatesToScreenshot,
   normalizeSizeToScreenshot,
-  normalizeCoordinatesForClick,
   type BoundingBoxOptions 
 } from './utils.js';
