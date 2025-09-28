@@ -2,8 +2,13 @@ import {
   getAccessibilityTree, 
   listAvailableWindows,
   displayAvailableWindows,
+  findElement,
+  clickElement,
+  drawBoundingBox,
   type A11yResult,
-  type WindowInfo
+  type WindowInfo,
+  getImageDimensions,
+  drawMultipleBoundingBoxes
 } from "./lib/index.js";
 
 async function main() {
@@ -40,6 +45,10 @@ async function main() {
         const screenshotBuffer = Buffer.from(result.screenshot, 'base64');
         await Bun.write(screenshotFile, screenshotBuffer);
         console.log(`Screenshot saved to: ${screenshotFile}`);
+        
+        // Log screenshot dimensions
+        const dimensions = await getImageDimensions(screenshotFile);
+        console.log(`Screenshot dimensions: ${dimensions.width}x${dimensions.height}`);
       } catch (error) {
         console.warn("Failed to save screenshot:", error);
       }
@@ -52,14 +61,62 @@ async function main() {
       screenshot: result.screenshot ? screenshotFile : "No screenshot available"
     };
     
-    // Output the result as formatted JSON
-    console.log("\nWindow & Accessibility Tree:");
-    console.log(JSON.stringify(jsonResult, null, 2));
-    
     // Optional: Save to file
     const outputFile = `data/${windowName.toLowerCase().replace(/\s+/g, '-')}-a11y-tree.json`;
     await Bun.write(outputFile, JSON.stringify(jsonResult, null, 2));
     console.log(`\nResult saved to: ${outputFile}`);
+    
+    // Example: Find and click the Refresh button
+    console.log("\nExample: Finding Refresh button...");
+    const refreshButton = findElement(result.a11y, {
+      role: "AXButton",
+      description: "Refresh"
+    });
+    
+    if (refreshButton) {
+      console.log("Found Refresh button:", {
+        description: refreshButton.description,
+        position: refreshButton.position,
+        size: refreshButton.size
+      });
+      
+      // Draw bounding box around the refresh button
+      if (result.screenshot && screenshotFile) {
+        console.log("Window info:", result.window);
+        
+        const [screenX, screenY] = refreshButton.position!;
+        const [width, height] = refreshButton.size!;
+        const window = result.window;
+        
+        console.log(`Converting coordinates:`);
+        console.log(`  Screen coords: [${screenX}, ${screenY}]`);
+        console.log(`  Window position: [${window.x}, ${window.y}]`);
+        console.log(`  Element size: [${width}, ${height}]`);
+        
+        const testElements = [
+          // Use the original screen coordinates - normalization will be handled automatically
+          {
+            element: refreshButton,
+            options: { color: 'red', thickness: 3 }
+          }
+        ];
+        
+        // Pass the window info to enable coordinate normalization
+        const annotatedPath = await drawMultipleBoundingBoxes(
+          screenshotFile, 
+          testElements,
+          'data/screenshot_multi_test.png',
+          window  // Pass window info for coordinate normalization
+        );
+        console.log(`Test screenshot with multiple boxes saved to: ${annotatedPath}`);
+      }
+      
+      // Uncomment to actually click it:
+      // await clickElement(refreshButton);
+      // console.log("Clicked Refresh button!");
+    } else {
+      console.log("Refresh button not found");
+    }
     
   } catch (error: any) {
     console.error("\nError:", error.message);

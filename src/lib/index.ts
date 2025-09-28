@@ -14,8 +14,8 @@ export interface A11yNode {
   value?: string;
   roleDescription?: string;
   identifier?: string;
-  position?: { x: number; y: number };
-  size?: { width: number; height: number };
+  position?: [number, number];
+  size?: [number, number];
   enabled?: boolean;
   focused?: boolean;
   selected?: boolean;
@@ -241,3 +241,100 @@ export function displayAvailableWindows(windows: WindowInfo[]) {
   console.log("\n💡 You can use any part of the window title to search.");
   console.log("   Example: bun run src/index.ts Safari");
 }
+
+function calculateMatchScore(node: A11yNode, searchCriteria: Partial<A11yNode>): number {
+  let score = 0;
+  let totalCriteria = 0;
+
+  for (const [key, value] of Object.entries(searchCriteria)) {
+    if (value === undefined || value === null) continue;
+    
+    totalCriteria++;
+    const nodeValue = (node as any)[key];
+    
+    if (key === 'position' || key === 'size') {
+      if (Array.isArray(nodeValue) && Array.isArray(value) && 
+          nodeValue.length === 2 && value.length === 2) {
+        if (nodeValue[0] === value[0] && nodeValue[1] === value[1]) {
+          score += 10;
+        }
+      }
+    } else if (typeof value === 'string' && typeof nodeValue === 'string') {
+      if (nodeValue.toLowerCase().includes(value.toLowerCase())) {
+        score += 5;
+      } else if (nodeValue.toLowerCase() === value.toLowerCase()) {
+        score += 10;
+      }
+    } else if (nodeValue === value) {
+      score += 10;
+    }
+  }
+
+  return totalCriteria === 0 ? 0 : score / totalCriteria;
+}
+
+function searchTree(node: A11yNode, searchCriteria: Partial<A11yNode>): A11yNode[] {
+  const results: A11yNode[] = [];
+  
+  const score = calculateMatchScore(node, searchCriteria);
+  if (score > 0) {
+    results.push(node);
+  }
+  
+  if (node.children) {
+    for (const child of node.children) {
+      results.push(...searchTree(child, searchCriteria));
+    }
+  }
+  
+  return results;
+}
+
+export function findElement(tree: A11yNode, searchCriteria: Partial<A11yNode>): A11yNode | null {
+  const matches = searchTree(tree, searchCriteria);
+  
+  if (matches.length === 0) {
+    return null;
+  }
+  
+  matches.sort((a, b) => {
+    const scoreA = calculateMatchScore(a, searchCriteria);
+    const scoreB = calculateMatchScore(b, searchCriteria);
+    return scoreB - scoreA;
+  });
+  
+  return matches[0];
+}
+
+export async function clickElement(node: A11yNode): Promise<void> {
+  if (!node.position || !node.size) {
+    throw new Error("Element must have position and size to be clickable");
+  }
+  
+  const [x, y] = node.position;
+  const [width, height] = node.size;
+  
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  
+  const script = `
+    tell application "System Events"
+      click at {${centerX}, ${centerY}}
+    end tell
+  `;
+  
+  try {
+    await execAsync(`osascript -e '${script}'`);
+  } catch (error: any) {
+    throw new Error(`Failed to click element: ${error.message}`);
+  }
+}
+
+export { 
+  drawBoundingBox, 
+  drawMultipleBoundingBoxes, 
+  getImageDimensions, 
+  normalizeCoordinatesToScreenshot,
+  normalizeSizeToScreenshot,
+  type BoundingBoxOptions 
+} from './utils.js';
