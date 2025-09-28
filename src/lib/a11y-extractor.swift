@@ -29,6 +29,10 @@ struct A11yResult: Codable {
     var screenshot: String
 }
 
+struct FullScreenshotResult: Codable {
+    var display: WindowDimensions
+    var screenshot: String
+}
 
 class A11yExtractor {
     static func extractTree(from element: AXUIElement, depth: Int = 0, maxDepth: Int = 15) -> A11yNode? {
@@ -200,6 +204,39 @@ class A11yExtractor {
         return nil
     }
     
+    static func getMainScreenDimensions() -> WindowDimensions? {
+        guard let screen = NSScreen.main else {
+            return nil
+        }
+        let frame = screen.frame
+        return WindowDimensions(
+            x: 0,
+            y: 0,
+            width: Double(frame.width),
+            height: Double(frame.height)
+        )
+    }
+    
+    static func captureFullDisplayScreenshotAsBase64() -> String? {
+        let tempFile = "/tmp/full_screenshot_\(ProcessInfo.processInfo.processIdentifier).png"
+        let task = Process()
+        task.launchPath = "/usr/sbin/screencapture"
+        task.arguments = ["-x", tempFile]
+        
+        task.launch()
+        task.waitUntilExit()
+        
+        if task.terminationStatus == 0 {
+            if let imageData = NSData(contentsOfFile: tempFile) {
+                try? FileManager.default.removeItem(atPath: tempFile)
+                return imageData.base64EncodedString()
+            }
+        }
+        
+        try? FileManager.default.removeItem(atPath: tempFile)
+        return nil
+    }
+    
     static func findWindow(withTitle searchTitle: String) -> AXUIElement? {
         let allWindows = getAllWindows()
         
@@ -297,6 +334,30 @@ func main() {
             }
         } catch {
             print("{\"error\": \"Failed to encode window list: \(error)\"}")
+        }
+        exit(0)
+    }
+    
+    // Handle full display screenshot capture
+    if windowTitle.lowercased() == "--full-screenshot" {
+        guard let display = A11yExtractor.getMainScreenDimensions(),
+              let screenshotBase64 = A11yExtractor.captureFullDisplayScreenshotAsBase64() else {
+            print("{\"error\": \"Failed to capture full display screenshot\"}")
+            exit(1)
+        }
+        
+        let result = FullScreenshotResult(display: display, screenshot: screenshotBase64)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+            let jsonData = try encoder.encode(result)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print(jsonString)
+            }
+        } catch {
+            print("{\"error\": \"Failed to encode full screenshot result: \(error)\"}")
+            exit(1)
         }
         exit(0)
     }

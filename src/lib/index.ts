@@ -35,6 +35,11 @@ export interface A11yResult {
   screenshot: string;
 }
 
+export interface FullScreenshotResult {
+  display: WindowDimensions;
+  screenshot: string;
+}
+
 export interface WindowInfo {
   app: string;
   title: string;
@@ -219,6 +224,46 @@ export async function getAccessibilityTree(windowTitle: string, autoRetry: boole
   });
 }
 
+export async function getFullDisplayScreenshot(): Promise<FullScreenshotResult> {
+  const executable = await compileSwiftIfNeeded();
+  
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ["--full-screenshot"]);
+    
+    let stdout = "";
+    let stderr = "";
+    
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}: ${stderr || stdout}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout) as FullScreenshotResult;
+        if ((result as any).error) {
+          reject(new Error((result as any).error));
+        } else {
+          resolve(result);
+        }
+      } catch (error) {
+        reject(new Error(`Failed to parse JSON output: ${error}`));
+      }
+    });
+  });
+}
+
 export function displayAvailableWindows(windows: WindowInfo[]) {
   console.log("\n📱 Available windows:");
   
@@ -376,5 +421,8 @@ export {
   getImageDimensions, 
   normalizeCoordinatesToScreenshot,
   normalizeSizeToScreenshot,
-  type BoundingBoxOptions 
+  normalizeScreenCoordinatesToFullScreenshot,
+  drawCircleAtScreenCoordinatesOnFullScreenshot,
+  type BoundingBoxOptions,
+  type CircleOptions 
 } from './utils.js';

@@ -9,7 +9,9 @@ import {
   type A11yResult,
   type WindowInfo,
   getImageDimensions,
-  drawMultipleBoundingBoxes
+  drawMultipleBoundingBoxes,
+  getFullDisplayScreenshot,
+  drawCircleAtScreenCoordinatesOnFullScreenshot
 } from "./lib/index.js";
 
 async function main() {
@@ -125,6 +127,28 @@ async function main() {
       // Uncomment to actually click it:
       await clickElement(refreshButton, result.window);  // Pass window info for coordinate normalization
       console.log("Clicked Refresh button!");
+
+      // Capture full display screenshot and draw a thick circle over click coordinates
+      try {
+        const full = await getFullDisplayScreenshot();
+        const fullScreenshotFile = `data/full_screenshot.png`;
+        if (full.screenshot && full.screenshot.length > 0) {
+          const fullBuf = Buffer.from(full.screenshot, 'base64');
+          await Bun.write(fullScreenshotFile, fullBuf);
+          const clickX = refreshButton.position![0] + refreshButton.size![0] / 2;
+          const clickY = refreshButton.position![1] + refreshButton.size![1] / 2;
+          const annotatedFull = await drawCircleAtScreenCoordinatesOnFullScreenshot(
+            fullScreenshotFile,
+            [clickX, clickY],
+            full.display,
+            'data/full_screenshot_with_click.png',
+            { color: 'yellow', thickness: 16, radius: 22, opacity: 1 }
+          );
+          console.log(`Full display screenshot with click saved to: ${annotatedFull}`);
+        }
+      } catch (e) {
+        console.warn('Failed to create full display screenshot with click:', e);
+      }
     } else {
       console.log("Refresh button not found");
     }
