@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { A11yNode, WindowDimensions } from './index.js';
+import type { A11yNode, WindowDimensions } from './index.js';
 
 export async function getImageDimensions(imagePath: string): Promise<{ width: number; height: number }> {
   const image = sharp(imagePath);
