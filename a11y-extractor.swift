@@ -16,6 +16,18 @@ struct A11yNode: Codable {
     var children: [A11yNode]?
 }
 
+struct WindowDimensions: Codable {
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+}
+
+struct A11yResult: Codable {
+    var window: WindowDimensions
+    var a11y: A11yNode
+}
+
 
 class A11yExtractor {
     static func extractTree(from element: AXUIElement, depth: Int = 0, maxDepth: Int = 15) -> A11yNode? {
@@ -129,6 +141,28 @@ class A11yExtractor {
         return allWindows.sorted { $0.appName.lowercased() < $1.appName.lowercased() }
     }
     
+    static func getWindowDimensions(from element: AXUIElement) -> WindowDimensions? {
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        
+        // Get position
+        if let positionValue = getAttribute(element, attribute: kAXPositionAttribute) {
+            AXValueGetValue(positionValue as! AXValue, .cgPoint, &position)
+        }
+        
+        // Get size
+        if let sizeValue = getAttribute(element, attribute: kAXSizeAttribute) {
+            AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        }
+        
+        return WindowDimensions(
+            x: Double(position.x),
+            y: Double(position.y),
+            width: Double(size.width),
+            height: Double(size.height)
+        )
+    }
+    
     static func findWindow(withTitle searchTitle: String) -> AXUIElement? {
         let allWindows = getAllWindows()
         
@@ -223,18 +257,25 @@ func main() {
         exit(1)
     }
     
+    // Extract window dimensions
+    guard let windowDimensions = A11yExtractor.getWindowDimensions(from: window) else {
+        print("{\"error\": \"Failed to extract window dimensions\"}")
+        exit(1)
+    }
+    
     // Extract the accessibility tree
     if let tree = A11yExtractor.extractTree(from: window) {
+        let result = A11yResult(window: windowDimensions, a11y: tree)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
         do {
-            let jsonData = try encoder.encode(tree)
+            let jsonData = try encoder.encode(result)
             if let jsonString = String(data: jsonData, encoding: .utf8) {
                 print(jsonString)
             }
         } catch {
-            print("{\"error\": \"Failed to encode accessibility tree: \(error)\"}")
+            print("{\"error\": \"Failed to encode accessibility result: \(error)\"}")
             exit(1)
         }
     } else {

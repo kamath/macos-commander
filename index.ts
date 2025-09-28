@@ -21,6 +21,18 @@ interface A11yNode {
   children?: A11yNode[];
 }
 
+interface WindowDimensions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface A11yResult {
+  window: WindowDimensions;
+  a11y: A11yNode;
+}
+
 interface WindowInfo {
   app: string;
   title: string;
@@ -114,7 +126,7 @@ async function listAvailableWindows(): Promise<WindowListResponse> {
   });
 }
 
-async function getAccessibilityTree(windowTitle: string, autoRetry: boolean = true): Promise<A11yNode> {
+async function getAccessibilityTree(windowTitle: string, autoRetry: boolean = true): Promise<A11yResult> {
   const executable = await compileSwiftIfNeeded();
   
   return new Promise((resolve, reject) => {
@@ -245,16 +257,16 @@ async function main() {
   
   try {
     console.log(`Searching for window containing: "${windowName}"...`);
-    const tree = await getAccessibilityTree(windowName);
+    const result = await getAccessibilityTree(windowName);
     
-    // Output the tree as formatted JSON
-    console.log("\nAccessibility Tree:");
-    console.log(JSON.stringify(tree, null, 2));
+    // Output the result as formatted JSON
+    console.log("\nWindow & Accessibility Tree:");
+    console.log(JSON.stringify(result, null, 2));
     
     // Optional: Save to file
     const outputFile = `${windowName.toLowerCase().replace(/\s+/g, '-')}-a11y-tree.json`;
-    await Bun.write(outputFile, JSON.stringify(tree, null, 2));
-    console.log(`\nTree saved to: ${outputFile}`);
+    await Bun.write(outputFile, JSON.stringify(result, null, 2));
+    console.log(`\nResult saved to: ${outputFile}`);
     
   } catch (error: any) {
     console.error("\nError:", error.message);
@@ -280,8 +292,13 @@ export {
   listAvailableWindows,
   compileSwiftIfNeeded, 
   waitForUserInput, 
-  displayAvailableWindows,
-  A11yNode, 
+  displayAvailableWindows
+};
+
+export type { 
+  A11yNode,
+  WindowDimensions,
+  A11yResult, 
   WindowInfo, 
   WindowListResponse 
 };

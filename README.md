@@ -102,21 +102,29 @@ interface A11yNode {
 
 ```json
 {
-  "role": "AXWindow",
-  "title": "Documents",
-  "roleDescription": "standard window",
-  "position": { "x": 100, "y": 50 },
-  "size": { "width": 800, "height": 600 },
-  "enabled": true,
-  "focused": true,
-  "children": [
-    {
-      "role": "AXButton",
-      "title": "Close",
-      "roleDescription": "close button",
-      "enabled": true
-    }
-  ]
+  "window": {
+    "x": 100,
+    "y": 50,
+    "width": 800,
+    "height": 600
+  },
+  "a11y": {
+    "role": "AXWindow",
+    "title": "Documents",
+    "roleDescription": "standard window",
+    "position": { "x": 100, "y": 50 },
+    "size": { "width": 800, "height": 600 },
+    "enabled": true,
+    "focused": true,
+    "children": [
+      {
+        "role": "AXButton",
+        "title": "Close",
+        "roleDescription": "close button",
+        "enabled": true
+      }
+    ]
+  }
 }
 ```
 
