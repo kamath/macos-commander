@@ -1,12 +1,13 @@
 import { spawn } from "child_process";
 import { existsSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { promisify } from "util";
 import { exec } from "child_process";
+import { fileURLToPath } from "url";
 
 const execAsync = promisify(exec);
 
-interface A11yNode {
+export interface A11yNode {
   role?: string;
   title?: string;
   description?: string;
@@ -21,36 +22,44 @@ interface A11yNode {
   children?: A11yNode[];
 }
 
-interface WindowDimensions {
+export interface WindowDimensions {
   x: number;
   y: number;
   width: number;
   height: number;
 }
 
-interface A11yResult {
+export interface A11yResult {
   window: WindowDimensions;
   a11y: A11yNode;
   screenshot: string;
 }
 
-interface WindowInfo {
+export interface WindowInfo {
   app: string;
   title: string;
 }
 
-interface WindowListResponse {
+export interface WindowListResponse {
   availableWindows: WindowInfo[];
 }
 
-interface ErrorWithWindows {
+export interface ErrorWithWindows {
   error: string;
   availableWindows: WindowInfo[];
 }
 
-async function compileSwiftIfNeeded(): Promise<string> {
-  const swiftFile = join(process.cwd(), "a11y-extractor.swift");
-  const executableFile = join(process.cwd(), "a11y-extractor");
+function getProjectRoot(): string {
+  // Get the directory where this file is located
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  // Go up two levels: src/lib -> src -> project root
+  return join(currentDir, "../..");
+}
+
+export async function compileSwiftIfNeeded(): Promise<string> {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const swiftFile = join(currentDir, "a11y-extractor.swift");
+  const executableFile = join(currentDir, "a11y-extractor");
   
   // Check if Swift file exists
   if (!existsSync(swiftFile)) {
@@ -80,7 +89,7 @@ async function compileSwiftIfNeeded(): Promise<string> {
   return executableFile;
 }
 
-async function waitForUserInput(message: string): Promise<void> {
+export async function waitForUserInput(message: string): Promise<void> {
   return new Promise((resolve) => {
     process.stdout.write(message);
     process.stdin.once('data', () => {
@@ -90,7 +99,7 @@ async function waitForUserInput(message: string): Promise<void> {
   });
 }
 
-async function listAvailableWindows(): Promise<WindowListResponse> {
+export async function listAvailableWindows(): Promise<WindowListResponse> {
   const executable = await compileSwiftIfNeeded();
   
   return new Promise((resolve, reject) => {
@@ -127,7 +136,7 @@ async function listAvailableWindows(): Promise<WindowListResponse> {
   });
 }
 
-async function getAccessibilityTree(windowTitle: string, autoRetry: boolean = true): Promise<A11yResult> {
+export async function getAccessibilityTree(windowTitle: string, autoRetry: boolean = true): Promise<A11yResult> {
   const executable = await compileSwiftIfNeeded();
   
   return new Promise((resolve, reject) => {
@@ -210,7 +219,7 @@ async function getAccessibilityTree(windowTitle: string, autoRetry: boolean = tr
   });
 }
 
-function displayAvailableWindows(windows: WindowInfo[]) {
+export function displayAvailableWindows(windows: WindowInfo[]) {
   console.log("\n📱 Available windows:");
   
   // Group windows by app
@@ -230,99 +239,5 @@ function displayAvailableWindows(windows: WindowInfo[]) {
   }
   
   console.log("\n💡 You can use any part of the window title to search.");
-  console.log("   Example: bun run index.ts Safari");
-}
-
-async function main() {
-  const windowName = process.argv[2];
-  
-  if (!windowName) {
-    console.error("Usage: bun run index.ts <window-name>");
-    console.error("       bun run index.ts --list  (to list all windows)");
-    console.error("\nExample: bun run index.ts Cursor");
-    process.exit(1);
-  }
-  
-  // Handle listing all windows
-  if (windowName.toLowerCase() === "--list" || windowName.toLowerCase() === "list") {
-    try {
-      console.log("Getting list of available windows...");
-      const result = await listAvailableWindows();
-      displayAvailableWindows(result.availableWindows);
-      process.exit(0);
-    } catch (error: any) {
-      console.error("\nError listing windows:", error.message);
-      process.exit(1);
-    }
-  }
-  
-  try {
-    console.log(`Searching for window containing: "${windowName}"...`);
-    const result = await getAccessibilityTree(windowName);
-    
-    // Save screenshot if available
-    if (result.screenshot && result.screenshot.length > 0) {
-      try {
-        const screenshotBuffer = Buffer.from(result.screenshot, 'base64');
-        await Bun.write("screenshot.png", screenshotBuffer);
-        console.log("Screenshot saved to: screenshot.png");
-      } catch (error) {
-        console.warn("Failed to save screenshot:", error);
-      }
-    }
-    
-    // Create a copy of result without the large base64 screenshot for JSON output
-    const jsonResult = {
-      window: result.window,
-      a11y: result.a11y,
-      screenshot: result.screenshot ? "screenshot.png" : "No screenshot available"
-    };
-    
-    // Output the result as formatted JSON
-    console.log("\nWindow & Accessibility Tree:");
-    console.log(JSON.stringify(jsonResult, null, 2));
-    
-    // Optional: Save to file
-    const outputFile = `${windowName.toLowerCase().replace(/\s+/g, '-')}-a11y-tree.json`;
-    await Bun.write(outputFile, JSON.stringify(jsonResult, null, 2));
-    console.log(`\nResult saved to: ${outputFile}`);
-    
-  } catch (error: any) {
-    console.error("\nError:", error.message);
-    
-    // Show available windows if the window wasn't found
-    if (error.availableWindows) {
-      displayAvailableWindows(error.availableWindows);
-    } else if (error.message.includes("accessibility permissions")) {
-      console.error("\nTo grant accessibility permissions:");
-      console.error("1. Open System Settings > Privacy & Security > Accessibility");
-      console.error("2. Click the '+' button and add your terminal app (Terminal, iTerm2, etc.)");
-      console.error("3. Make sure the checkbox next to your terminal app is checked");
-      console.error("4. You may need to restart your terminal");
-    }
-    
-    process.exit(1);
-  }
-}
-
-// Export functions for use as a library
-export { 
-  getAccessibilityTree, 
-  listAvailableWindows,
-  compileSwiftIfNeeded, 
-  waitForUserInput, 
-  displayAvailableWindows
-};
-
-export type { 
-  A11yNode,
-  WindowDimensions,
-  A11yResult, 
-  WindowInfo, 
-  WindowListResponse 
-};
-
-// Run main if executed directly
-if (import.meta.main) {
-  main().catch(console.error);
+  console.log("   Example: bun run src/index.ts Safari");
 }

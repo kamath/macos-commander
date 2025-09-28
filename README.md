@@ -32,22 +32,26 @@ bun install
 
 ```bash
 # Search for a window by name
-bun run index.ts "Window Name"
+bun run start "Window Name"
+# or
+bun run src/index.ts "Window Name"
 
 # List all available windows
-bun run index.ts --list
+bun run list
+# or
+bun run src/index.ts --list
 
 # Examples
-bun run index.ts Finder
-bun run index.ts Safari
-bun run index.ts "Visual Studio Code"
-bun run index.ts Cursor    # Partial match works too
+bun run start Finder
+bun run start Safari
+bun run start "Visual Studio Code"
+bun run start Cursor    # Partial match works too
 ```
 
 ### As a Library
 
 ```typescript
-import { getAccessibilityTree, listAvailableWindows } from './index.ts';
+import { getAccessibilityTree, listAvailableWindows } from 'macos-a11y-tree';
 
 // Extract accessibility tree
 const tree = await getAccessibilityTree("Finder");
