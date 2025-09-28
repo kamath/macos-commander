@@ -1,0 +1,21 @@
+{
+  "name": "macos-a11y-tree",
+  "version": "1.0.0",
+  "description": "Extract macOS accessibility tree as JSON for specified windows",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts",
+    "build": "bun build index.ts --target=bun --outdir=dist"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0"
+  },
+  "dependencies": {
+    "node-mac-permissions": "^2.3.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
