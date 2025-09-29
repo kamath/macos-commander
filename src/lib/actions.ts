@@ -4,7 +4,7 @@ import {
   clickElement,
   getDisplayScreenshotForRect,
   drawMultipleBoundingBoxes,
-  drawCircleAtScreenCoordinatesOnFullScreenshot
+  drawCircleAtScreenCoordinatesOnFullScreenshot,
 } from "./index.js";
 
 interface ClickOptions {
@@ -35,14 +35,17 @@ function findNodeById(node: A11yNode, targetId: string): A11yNode | null {
   return null;
 }
 
-export async function click(nodeId: string, options: ClickOptions): Promise<void> {
+export async function click(
+  nodeId: string,
+  options: ClickOptions
+): Promise<void> {
   const {
     tree,
     windowInfo,
     screenshotPath,
     boundingBoxOutputPath = "data/screenshot_multi_test.png",
     fullScreenshotPath = "data/full_screenshot.png",
-    fullScreenshotAnnotatedPath = "data/full_screenshot_with_click.png"
+    fullScreenshotAnnotatedPath = "data/full_screenshot_with_click.png",
   } = options;
 
   const targetNode = findNodeById(tree, nodeId);
@@ -56,11 +59,13 @@ export async function click(nodeId: string, options: ClickOptions): Promise<void
     title: targetNode.title,
     description: targetNode.description,
     position: targetNode.position,
-    size: targetNode.size
+    size: targetNode.size,
   });
 
   if (!targetNode.position || !targetNode.size) {
-    throw new Error(`Node ${nodeId} does not have position/size and cannot be clicked`);
+    throw new Error(
+      `Node ${nodeId} does not have position/size and cannot be clicked`
+    );
   }
 
   if (screenshotPath) {
@@ -84,7 +89,11 @@ export async function click(nodeId: string, options: ClickOptions): Promise<void
       await Bun.write(fullScreenshotPath, fullBuffer);
       const clickX = targetNode.position[0] + targetNode.size[0] / 2;
       const clickY = targetNode.position[1] + targetNode.size[1] / 2;
-      const { finalOutputPath: annotatedFull, cx, cy } = await drawCircleAtScreenCoordinatesOnFullScreenshot(
+      const {
+        finalOutputPath: annotatedFull,
+        cx,
+        cy,
+      } = await drawCircleAtScreenCoordinatesOnFullScreenshot(
         fullScreenshotPath,
         [clickX, clickY],
         full.display,
@@ -92,15 +101,21 @@ export async function click(nodeId: string, options: ClickOptions): Promise<void
         { color: "yellow", thickness: 16, radius: 22, opacity: 1 }
       );
       console.log(`Full display screenshot saved to: ${fullScreenshotPath}`);
-      console.log(`Full display screenshot with click saved to: ${annotatedFull}`);
+      console.log(
+        `Full display screenshot with click saved to: ${annotatedFull}`
+      );
       console.log(`Click coordinates in global screen: [${clickX}, ${clickY}]`);
-      console.log(`Click coordinates within full display screenshot: [${cx}, ${cy}]`);
+      console.log(
+        `Click coordinates within full display screenshot: [${cx}, ${cy}]`
+      );
     }
   } catch (error) {
-    console.warn(`Failed to create full display screenshot with click for node ${nodeId}:`, error);
+    console.warn(
+      `Failed to create full display screenshot with click for node ${nodeId}:`,
+      error
+    );
   }
 
   await clickElement(targetNode, windowInfo);
   console.log(`Clicked node ${nodeId}!`);
 }
-
