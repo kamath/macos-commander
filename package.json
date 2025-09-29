@@ -18,8 +18,10 @@
     "@types/node": "^20.0.0"
   },
   "dependencies": {
+    "ai": "^5.0.56",
     "node-mac-permissions": "^2.3.0",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "zod": "^4.1.11"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
