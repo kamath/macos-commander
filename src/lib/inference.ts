@@ -7,28 +7,20 @@ export const methodSchema = z.enum(["click"]);
 
 const actResponseSchema = z.object({
   method: methodSchema,
-  window: z.string(),
+  windowId: z.string(),
 });
 
 export type ActResponse = z.infer<typeof actResponseSchema>;
 
 export async function act(
   prompt: string,
-  model: LanguageModel,
-  a11y: A11yNode
-) {
+  model: LanguageModel
+): Promise<ActResponse> {
   // Get the list of available windows with their IDs
-  let windowsInfo = "";
-  try {
-    const windowList = await listAvailableWindows();
-    const windowsText = windowList.availableWindows
-      .map((w) => `  • "${w.title}" (App: ${w.app}, ID: ${w.id})`)
-      .join("\n");
-    windowsInfo = `\n\nAvailable Windows:\n${windowsText}\n`;
-  } catch (error) {
-    console.warn("Failed to get window list:", error);
-    windowsInfo = "\n\nNote: Unable to retrieve available windows list.\n";
-  }
+  const windowList = await listAvailableWindows();
+  const windowsText = windowList.availableWindows
+    .map((w) => `  • "${w.title}" (App: ${w.app}, ID: ${w.id})`)
+    .join("\n");
 
   // First, generate the method to use like "click"
   const methodResponse = await generateObject({
@@ -37,10 +29,14 @@ export async function act(
     prompt: `
 	You are a helpful assistant that can act on a given prompt.
 	You will be given a prompt and a list of available actions. The actions are:
+	<actions>
 	${Object.values(methodSchema.enum).join(", ")}
+	</actions>
 	
-	Here are the available windows:
-	${windowsInfo}
+	Available Windows:
+	<available-windows>
+	${windowsText}
+	</available-windows>
 	
 	Given an instruction like "click the refresh button on edge", you should return the following JSON:
 	{
@@ -49,6 +45,11 @@ export async function act(
 	}
 	
 	Use the exact window ID from the available windows list above. If the instruction mentions a specific app or window title, match it to the corresponding window ID.
+
+	Lastly, the instruction is as follows:
+	<instruction>
+		${prompt}
+	</instruction>
 	`,
   });
   return methodResponse.object;
