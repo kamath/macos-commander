@@ -510,25 +510,6 @@ function searchTree(
   return results;
 }
 
-export function findElement(
-  tree: A11yNode,
-  searchCriteria: Partial<A11yNode>
-): A11yNode | null {
-  const matches = searchTree(tree, searchCriteria);
-
-  if (matches.length === 0) {
-    return null;
-  }
-
-  matches.sort((a, b) => {
-    const scoreA = calculateMatchScore(a, searchCriteria);
-    const scoreB = calculateMatchScore(b, searchCriteria);
-    return scoreB - scoreA;
-  });
-
-  return matches[0];
-}
-
 function generateWindowId(appName: string, windowTitle: string): string {
   const cleanApp = appName
     .toLowerCase()
