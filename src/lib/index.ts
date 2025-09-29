@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 const execAsync = promisify(exec);
 
 export interface A11yNode {
+  id: string;
   role?: string;
   title?: string;
   description?: string;
@@ -215,6 +216,10 @@ export async function getAccessibilityTree(windowTitle: string, autoRetry: boole
         if (tree.error) {
           reject(new Error(tree.error));
         } else {
+          // Assign hierarchical IDs to the accessibility tree
+          if (tree.a11y) {
+            tree.a11y = assignHierarchicalIds(tree.a11y);
+          }
           resolve(tree);
         }
       } catch (error) {
@@ -474,6 +479,26 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
       }
     });
   });
+}
+
+export function assignHierarchicalIds(tree: A11yNode, parentId: string = ""): A11yNode {
+  const assignIds = (node: A11yNode, currentId: string): A11yNode => {
+    const hasChildren = node.children && node.children.length > 0;
+    const nodeId = hasChildren ? `${currentId}.` : currentId;
+    const nodeWithId = { ...node, id: nodeId };
+    
+    if (hasChildren) {
+      nodeWithId.children = node.children!.map((child, index) => {
+        const childId = currentId ? `${currentId}.${index + 1}` : `${index + 1}`;
+        return assignIds(child, childId);
+      });
+    }
+    
+    return nodeWithId;
+  };
+  
+  const rootId = parentId || "1";
+  return assignIds(tree, rootId);
 }
 
 export { 

@@ -5,6 +5,7 @@ Extract the accessibility tree from any macOS window as JSON. This tool allows y
 ## Features
 
 - Extract complete accessibility tree from any window
+- **Hierarchical node IDs** automatically assigned (e.g., "1", "1.1", "1.2.", "1.2.1")
 - **Capture window screenshots** automatically as PNG files
 - Search windows by title (partial match supported)
 - **List all available windows** when target not found
@@ -82,6 +83,8 @@ The tool outputs a hierarchical JSON structure with the following properties for
 
 ```typescript
 interface A11yNode {
+  id: string;              // Hierarchical ID (e.g., "1", "1.1", "1.2.", "1.2.1")
+                          // Nodes with children end with "." (e.g., "1.2.")
   role?: string;           // Element type (e.g., "AXWindow", "AXButton")
   title?: string;          // Element title/label
   description?: string;    // Additional description
@@ -115,6 +118,7 @@ interface A11yNode {
   },
   "screenshot": "screenshot.png",
   "a11y": {
+    "id": "1.",
     "role": "AXWindow",
     "title": "Documents",
     "roleDescription": "standard window",
@@ -124,6 +128,7 @@ interface A11yNode {
     "focused": true,
     "children": [
       {
+        "id": "1.1",
         "role": "AXButton",
         "title": "Close",
         "roleDescription": "close button",

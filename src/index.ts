@@ -12,7 +12,8 @@ import {
   drawMultipleBoundingBoxes,
   getFullDisplayScreenshot,
   getDisplayScreenshotForRect,
-  drawCircleAtScreenCoordinatesOnFullScreenshot
+  drawCircleAtScreenCoordinatesOnFullScreenshot,
+  assignHierarchicalIds
 } from "./lib/index.js";
 
 async function main() {
