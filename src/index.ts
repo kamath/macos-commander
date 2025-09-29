@@ -1,5 +1,6 @@
 import { google } from "@ai-sdk/google";
 import { act } from "./lib/inference.js";
+import { listAvailableWindows } from "./lib/index.js";
 import * as readline from "readline";
 import chalk from "chalk";
 
@@ -28,6 +29,7 @@ async function startRepl() {
   });
 
   const model = google("gemini-2.0-flash");
+  let prevWindowId: string | undefined;
 
   while (true) {
     try {
@@ -63,7 +65,23 @@ async function startRepl() {
       console.log("─".repeat(50));
 
       try {
-        await act(prompt, model);
+        const result = await act(prompt, model, true, prevWindowId);
+
+        // Validate that the returned window ID still exists
+        const windowList = await listAvailableWindows();
+        const windowExists = windowList.availableWindows.some(
+          (w) => w.id === result.windowId
+        );
+
+        if (windowExists) {
+          prevWindowId = result.windowId; // Update prevWindowId for next action
+        } else {
+          console.warn(
+            `⚠️  Window "${result.windowId}" no longer exists, clearing previous window reference`
+          );
+          prevWindowId = undefined; // Clear invalid window ID
+        }
+
         console.log("─".repeat(50));
         console.log("✅ Action completed!\n");
       } catch (error: any) {

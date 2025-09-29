@@ -83,7 +83,7 @@ Rules:
 4. Consider context - buttons for actions, text fields for input, etc.
 5. If no element matches well, return an empty string for nodeId
 
-Return only the node ID of the best matching element.
+Return only the node ID of the BEST matching element. The node ID should be the exact ID as it appears in the tree, including any trailing "." characters.
 `,
     });
 
@@ -97,7 +97,8 @@ Return only the node ID of the best matching element.
 export async function act(
   prompt: string,
   model: LanguageModel,
-  debug: boolean = true
+  debug: boolean = true,
+  prevWindowId?: string
 ): Promise<ActResponse> {
   // Get the list of available windows with their IDs
   const windowList = await listAvailableWindows();
@@ -120,14 +121,26 @@ export async function act(
 	<available-windows>
 	${windowsText}
 	</available-windows>
+	${
+    prevWindowId
+      ? `
+	Previous Window ID: ${prevWindowId}
+	If the instruction doesn't specify a particular window/app, use the previous window ID as the default.
+	`
+      : ""
+  }
 	
 	Given an instruction like "click the refresh button on edge", you should return the following JSON:
 	{
 		"method": "click",
-		"window": "window-id-of-the-window-to-act-on",
+		"windowId": "window-id-of-the-window-to-act-on",
 	}
 	
-	Use the exact window ID from the available windows list above. If the instruction mentions a specific app or window title, match it to the corresponding window ID.
+	Use the exact window ID from the available windows list above. If the instruction mentions a specific app or window title, match it to the corresponding window ID.${
+    prevWindowId
+      ? ` If no specific window is mentioned in the instruction, use the previous window ID: ${prevWindowId}`
+      : ""
+  }
 
 	Lastly, the instruction is as follows:
 	<instruction>
@@ -193,6 +206,24 @@ export async function act(
         await actClick(result, screenshotFile, prompt, model);
         break;
     }
+
+    // Refresh window IDs after action completion to ensure we return a valid window ID
+    const refreshedWindowList = await listAvailableWindows();
+    const currentWindow = refreshedWindowList.availableWindows.find(
+      (w) => w.id === windowId
+    );
+
+    if (currentWindow) {
+      // Window still exists, return the original response
+      return methodResponse.object;
+    } else {
+      // Window no longer exists, log warning and return response with original ID
+      // (the caller can handle this case if needed)
+      console.warn(
+        `⚠️  Window with ID "${windowId}" no longer exists after action completion`
+      );
+      return methodResponse.object;
+    }
   } catch (error: any) {
     console.error("\nError:", error.message);
 
@@ -215,7 +246,6 @@ export async function act(
 
     process.exit(1);
   }
-  return methodResponse.object;
 }
 
 async function actClick(
