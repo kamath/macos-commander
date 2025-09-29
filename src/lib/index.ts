@@ -35,6 +35,11 @@ export interface A11yResult {
   screenshot: string;
 }
 
+export interface FullScreenshotResult {
+  display: WindowDimensions;
+  screenshot: string;
+}
+
 export interface WindowInfo {
   app: string;
   title: string;
@@ -219,6 +224,83 @@ export async function getAccessibilityTree(windowTitle: string, autoRetry: boole
   });
 }
 
+export async function getFullDisplayScreenshot(): Promise<FullScreenshotResult> {
+  const executable = await compileSwiftIfNeeded();
+  
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ["--full-screenshot"]);
+    
+    let stdout = "";
+    let stderr = "";
+    
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}: ${stderr || stdout}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout) as FullScreenshotResult;
+        if ((result as any).error) {
+          reject(new Error((result as any).error));
+        } else {
+          resolve(result);
+        }
+      } catch (error) {
+        reject(new Error(`Failed to parse JSON output: ${error}`));
+      }
+    });
+  });
+}
+
+export async function getDisplayScreenshotForRect(rect: WindowDimensions): Promise<FullScreenshotResult> {
+  const executable = await compileSwiftIfNeeded();
+  const args = [
+    "--full-screenshot-for-rect",
+    String(rect.x),
+    String(rect.y),
+    String(rect.width),
+    String(rect.height)
+  ];
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args);
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (data) => { stdout += data.toString(); });
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}: ${stderr || stdout}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout) as FullScreenshotResult;
+        if ((result as any).error) {
+          reject(new Error((result as any).error));
+        } else {
+          resolve(result);
+        }
+      } catch (error) {
+        reject(new Error(`Failed to parse JSON output: ${error}`));
+      }
+    });
+  });
+}
+
 export function displayAvailableWindows(windows: WindowInfo[]) {
   console.log("\n📱 Available windows:");
   
@@ -348,26 +430,50 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
     throw new Error("Element must have position and size to be clickable");
   }
   
+  // Calculate the center point in global screen coordinates
   const centerX = node.position[0] + node.size[0] / 2;
   const centerY = node.position[1] + node.size[1] / 2;
   
-  console.log(`Clicking at normalized coordinates: [${centerX}, ${centerY}]`);
+  // If we have window info, we need to get the display that contains this window
+  // and apply the same coordinate transformation used for full display screenshots
+  let clickX = centerX;
+  let clickY = centerY;
+  
   if (windowInfo) {
-    console.log(`Original coordinates: [${node.position[0]}, ${node.position[1]}]`);
+    // First get the display info for this window
+    try {
+      const displayInfo = await getDisplayScreenshotForRect(windowInfo);
+      if (displayInfo.display) {
+        // The coordinates are already in global screen space, which is what we need
+        // The Swift code will handle finding the right display and coordinate transformation
+        console.log(`Display info: position=[${displayInfo.display.x}, ${displayInfo.display.y}], size=[${displayInfo.display.width}, ${displayInfo.display.height}]`);
+      }
+    } catch (e) {
+      console.warn('Could not get display info, using coordinates as-is:', e);
+    }
+    
+    console.log(`Original element position: [${node.position[0]}, ${node.position[1]}]`);
     console.log(`Window info: position=[${windowInfo.x}, ${windowInfo.y}], size=[${windowInfo.width}, ${windowInfo.height}]`);
   }
   
-  const script = `
-    tell application "System Events"
-      click at {${centerX}, ${centerY}}
-    end tell
-  `;
-  
-  try {
-    await execAsync(`osascript -e '${script}'`);
-  } catch (error: any) {
-    throw new Error(`Failed to click element: ${error.message}`);
-  }
+  console.log(`Clicking at global screen coordinates: [${clickX}, ${clickY}]`);
+
+  const executable = await compileSwiftIfNeeded();
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, ["--click-absolute", String(clickX), String(clickY)]);
+    let stderr = "";
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute click: ${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Click command failed with code ${code}: ${stderr}`));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 export { 
@@ -376,5 +482,8 @@ export {
   getImageDimensions, 
   normalizeCoordinatesToScreenshot,
   normalizeSizeToScreenshot,
-  type BoundingBoxOptions 
+  normalizeScreenCoordinatesToFullScreenshot,
+  drawCircleAtScreenCoordinatesOnFullScreenshot,
+  type BoundingBoxOptions,
+  type CircleOptions 
 } from './utils.js';

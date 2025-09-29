@@ -29,6 +29,10 @@ struct A11yResult: Codable {
     var screenshot: String
 }
 
+struct FullScreenshotResult: Codable {
+    var display: WindowDimensions
+    var screenshot: String
+}
 
 class A11yExtractor {
     static func extractTree(from element: AXUIElement, depth: Int = 0, maxDepth: Int = 15) -> A11yNode? {
@@ -199,6 +203,125 @@ class A11yExtractor {
         try? FileManager.default.removeItem(atPath: tempFile)
         return nil
     }
+
+    static func getDisplayBoundsContaining(point: CGPoint) -> WindowDimensions? {
+        var displayCount: UInt32 = 0
+        var err = CGGetActiveDisplayList(0, nil, &displayCount)
+        if err != .success || displayCount == 0 {
+            return nil
+        }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        err = CGGetActiveDisplayList(displayCount, &displays, &displayCount)
+        if err != .success {
+            return nil
+        }
+        
+        // Debug: Print all display bounds and the point we're checking
+        FileHandle.standardError.write("DEBUG: Looking for display containing point: \(point)\n".data(using: .utf8)!)
+        
+        for display in displays {
+            let bounds = CGDisplayBounds(display)
+            FileHandle.standardError.write("DEBUG: Display bounds: \(bounds)\n".data(using: .utf8)!)
+            
+            // Check if point is within this display's bounds
+            // Note: macOS allows negative Y coordinates for displays above the primary
+            if point.x >= bounds.origin.x && 
+               point.x < bounds.origin.x + bounds.size.width &&
+               point.y >= bounds.origin.y && 
+               point.y < bounds.origin.y + bounds.size.height {
+                return WindowDimensions(
+                    x: Double(bounds.origin.x),
+                    y: Double(bounds.origin.y),
+                    width: Double(bounds.size.width),
+                    height: Double(bounds.size.height)
+                )
+            }
+        }
+        
+        // If no display contains the point exactly, find the closest one
+        var closestDisplay: CGDirectDisplayID? = nil
+        var closestDistance = Double.infinity
+        
+        for display in displays {
+            let bounds = CGDisplayBounds(display)
+            let centerX = bounds.origin.x + bounds.size.width / 2
+            let centerY = bounds.origin.y + bounds.size.height / 2
+            let distance = sqrt(pow(point.x - centerX, 2) + pow(point.y - centerY, 2))
+            if distance < closestDistance {
+                closestDistance = distance
+                closestDisplay = display
+            }
+        }
+        
+        if let display = closestDisplay {
+            let bounds = CGDisplayBounds(display)
+            return WindowDimensions(
+                x: Double(bounds.origin.x),
+                y: Double(bounds.origin.y),
+                width: Double(bounds.size.width),
+                height: Double(bounds.size.height)
+            )
+        }
+        
+        return nil
+    }
+
+    static func clickAt(point: CGPoint) -> Bool {
+        // CGEvent uses a coordinate system where (0, 0) is the top-left of the primary display
+        // The coordinates provided from the accessibility API are already in this system
+        // We just need to use them directly without any transformation
+        
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        
+        // First move the mouse to the position to ensure we're at the right spot
+        guard let mouseMoved = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) else { return false }
+        mouseMoved.post(tap: .cghidEventTap)
+        
+        // Small delay to ensure mouse has moved
+        Thread.sleep(forTimeInterval: 0.01)
+        
+        // Now click at that position
+        guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left) else { return false }
+        guard let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left) else { return false }
+
+        mouseDown.post(tap: .cghidEventTap)
+        Thread.sleep(forTimeInterval: 0.01) // Small delay between down and up
+        mouseUp.post(tap: .cghidEventTap)
+        return true
+    }
+    
+    static func getMainScreenDimensions() -> WindowDimensions? {
+        guard let screen = NSScreen.main else {
+            return nil
+        }
+        let frame = screen.frame
+        return WindowDimensions(
+            x: 0,
+            y: 0,
+            width: Double(frame.width),
+            height: Double(frame.height)
+        )
+    }
+    
+    static func captureFullDisplayScreenshotAsBase64() -> String? {
+        let tempFile = "/tmp/full_screenshot_\(ProcessInfo.processInfo.processIdentifier).png"
+        let task = Process()
+        task.launchPath = "/usr/sbin/screencapture"
+        task.arguments = ["-x", tempFile]
+        
+        task.launch()
+        task.waitUntilExit()
+        
+        if task.terminationStatus == 0 {
+            if let imageData = NSData(contentsOfFile: tempFile) {
+                try? FileManager.default.removeItem(atPath: tempFile)
+                return imageData.base64EncodedString()
+            }
+        }
+        
+        try? FileManager.default.removeItem(atPath: tempFile)
+        return nil
+    }
     
     static func findWindow(withTitle searchTitle: String) -> AXUIElement? {
         let allWindows = getAllWindows()
@@ -299,6 +422,77 @@ func main() {
             print("{\"error\": \"Failed to encode window list: \(error)\"}")
         }
         exit(0)
+    }
+    
+    // Handle full display screenshot capture
+    if windowTitle.lowercased() == "--full-screenshot" {
+        guard let display = A11yExtractor.getMainScreenDimensions(),
+              let screenshotBase64 = A11yExtractor.captureFullDisplayScreenshotAsBase64() else {
+            print("{\"error\": \"Failed to capture full display screenshot\"}")
+            exit(1)
+        }
+
+        let result = FullScreenshotResult(display: display, screenshot: screenshotBase64)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+            let jsonData = try encoder.encode(result)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print(jsonString)
+            }
+        } catch {
+            print("{\"error\": \"Failed to encode full screenshot result: \(error)\"}")
+            exit(1)
+        }
+        exit(0)
+    }
+
+    // Handle full display screenshot for the display containing a given rect
+    if windowTitle.lowercased() == "--full-screenshot-for-rect" {
+        guard arguments.count >= 6,
+              let x = Double(arguments[2]),
+              let y = Double(arguments[3]),
+              let w = Double(arguments[4]),
+              let h = Double(arguments[5]) else {
+            print("{\"error\": \"Expected usage: --full-screenshot-for-rect <x> <y> <width> <height>\"}")
+            exit(1)
+        }
+        let center = CGPoint(x: x + w / 2.0, y: y + h / 2.0)
+        let displayBounds = A11yExtractor.getDisplayBoundsContaining(point: center) ?? WindowDimensions(x: 0, y: 0, width: w, height: h)
+        
+        guard let screenshotBase64 = A11yExtractor.captureWindowByCoordinatesAsBase64(dimensions: displayBounds) else {
+            print("{\"error\": \"Failed to capture display screenshot for rect\"}")
+            exit(1)
+        }
+        
+        let result = FullScreenshotResult(display: displayBounds, screenshot: screenshotBase64)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+            let jsonData = try encoder.encode(result)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print(jsonString)
+            }
+        } catch {
+            print("{\"error\": \"Failed to encode full screenshot result: \(error)\"}")
+            exit(1)
+        }
+        exit(0)
+    }
+
+    // Handle absolute click at global coordinates
+    if windowTitle.lowercased() == "--click-absolute" {
+        guard arguments.count >= 4,
+              let x = Double(arguments[2]),
+              let y = Double(arguments[3]) else {
+            print("{\"success\": false, \"error\": \"Expected usage: --click-absolute <x> <y>\"}")
+            exit(1)
+        }
+        let success = A11yExtractor.clickAt(point: CGPoint(x: x, y: y))
+        print("{\"success\": \(success)}")
+        exit(success ? 0 : 1)
     }
     
     // Find the window

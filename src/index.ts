@@ -9,7 +9,10 @@ import {
   type A11yResult,
   type WindowInfo,
   getImageDimensions,
-  drawMultipleBoundingBoxes
+  drawMultipleBoundingBoxes,
+  getFullDisplayScreenshot,
+  getDisplayScreenshotForRect,
+  drawCircleAtScreenCoordinatesOnFullScreenshot
 } from "./lib/index.js";
 
 async function main() {
@@ -120,6 +123,31 @@ async function main() {
           window  // Pass window info for coordinate normalization
         );
         console.log(`Test screenshot with multiple boxes saved to: ${annotatedPath}`);
+      }
+
+	  // Capture full display screenshot and draw a thick circle over click coordinates
+      try {
+        // Capture the specific display that contains the window
+        const full = await getDisplayScreenshotForRect(result.window);
+        const fullScreenshotFile = `data/full_screenshot.png`;
+        if (full.screenshot && full.screenshot.length > 0) {
+          const fullBuf = Buffer.from(full.screenshot, 'base64');
+          await Bun.write(fullScreenshotFile, fullBuf);
+          const clickX = refreshButton.position![0] + refreshButton.size![0] / 2;
+          const clickY = refreshButton.position![1] + refreshButton.size![1] / 2;
+          const {finalOutputPath: annotatedFull, cx, cy} = await drawCircleAtScreenCoordinatesOnFullScreenshot(
+            fullScreenshotFile,
+            [clickX, clickY],
+            full.display,
+            'data/full_screenshot_with_click.png',
+            { color: 'yellow', thickness: 16, radius: 22, opacity: 1 }
+          );
+          console.log(`Full display screenshot with click saved to: ${annotatedFull}`);
+		  console.log(`Click coordinates in global screen: [${clickX}, ${clickY}]`);
+		  console.log(`Click coordinates within full display screenshot: [${cx}, ${cy}]`);
+        }
+      } catch (e) {
+        console.warn('Failed to create full display screenshot with click:', e);
       }
       
       // Uncomment to actually click it:

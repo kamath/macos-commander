@@ -288,3 +288,104 @@ export async function drawMultipleBoundingBoxes(
   
   return finalOutputPath;
 }
+
+/**
+ * Normalizes global screen coordinates to full-display screenshot pixel coordinates
+ * Uses the same scaling approach as window normalization, but relative to the display.
+ */
+export function normalizeScreenCoordinatesToFullScreenshot(
+  screenCoords: [number, number],
+  displayInfo: WindowDimensions,
+  screenshotDimensions: { width: number; height: number }
+): [number, number] {
+  const [screenX, screenY] = screenCoords;
+  const displayRelativeX = screenX - displayInfo.x;
+  const displayRelativeY = screenY - displayInfo.y;
+  const scaleX = screenshotDimensions.width / displayInfo.width;
+  const scaleY = screenshotDimensions.height / displayInfo.height;
+  const normalizedX = displayRelativeX * scaleX;
+  const normalizedY = displayRelativeY * scaleY;
+  const clampedX = Math.max(0, Math.min(normalizedX, screenshotDimensions.width));
+  const clampedY = Math.max(0, Math.min(normalizedY, screenshotDimensions.height));
+  return [clampedX, clampedY];
+}
+
+export interface CircleOptions {
+  color?: string;
+  thickness?: number; // stroke width
+  radius?: number;
+  opacity?: number;
+}
+
+export async function drawCircleAtScreenCoordinatesOnFullScreenshot(
+  screenshotPath: string,
+  screenCoords: [number, number],
+  displayInfo: WindowDimensions,
+  outputPath?: string,
+  options: CircleOptions = {}
+): Promise<{
+	finalOutputPath: string;
+	cx: number;
+	cy: number;
+}> {
+  const image = sharp(screenshotPath);
+  const metadata = await image.metadata();
+  if (!metadata.width || !metadata.height) {
+    throw new Error("Could not get image dimensions");
+  }
+  const screenshotDimensions = { width: metadata.width, height: metadata.height };
+
+  const {
+    color = 'yellow',
+    thickness = 12,
+    radius = 18,
+    opacity = 1
+  } = options;
+
+  const [cx, cy] = normalizeScreenCoordinatesToFullScreenshot(
+    screenCoords,
+    displayInfo,
+    screenshotDimensions
+  );
+
+  const colorMap: Record<string, [number, number, number]> = {
+    red: [255, 0, 0],
+    green: [0, 255, 0],
+    blue: [0, 0, 255],
+    yellow: [255, 255, 0],
+    purple: [128, 0, 128],
+    orange: [255, 165, 0],
+    white: [255, 255, 255],
+    black: [0, 0, 0]
+  };
+  const [r, g, b] = colorMap[color] || colorMap.yellow;
+
+  const svg = `
+    <svg width="${metadata.width}" height="${metadata.height}" xmlns="http://www.w3.org/2000/svg">
+      <circle 
+        cx="${cx}" 
+        cy="${cy}" 
+        r="${radius}" 
+        fill="none" 
+        stroke="rgba(${r}, ${g}, ${b}, ${opacity})" 
+        stroke-width="${thickness}"
+      />
+    </svg>
+  `;
+
+  const result = await image
+    .composite([{
+      input: Buffer.from(svg),
+      top: 0,
+      left: 0
+    }])
+    .png();
+
+  const finalOutputPath = outputPath || screenshotPath.replace(/\.(png|jpg|jpeg)$/i, '_with_circle.png');
+  await result.toFile(finalOutputPath);
+  return {
+	finalOutputPath,
+	cx,
+	cy
+  };
+}
