@@ -228,6 +228,39 @@ class A11yExtractor {
         }
         return nil
     }
+
+    static func clickAt(point: CGPoint) -> Bool {
+        var displayCount: UInt32 = 0
+        var err = CGGetActiveDisplayList(0, nil, &displayCount)
+        if err != .success || displayCount == 0 {
+            return false
+        }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        err = CGGetActiveDisplayList(displayCount, &displays, &displayCount)
+        if err != .success {
+            return false
+        }
+        var targetBounds = CGDisplayBounds(CGMainDisplayID())
+        for display in displays {
+            let bounds = CGDisplayBounds(display)
+            if bounds.contains(point) {
+                targetBounds = bounds
+                break
+            }
+        }
+        // Convert from top-left origin (screen coords) to bottom-left origin (Quartz event coords) within the target display
+        let relativeY = point.y - targetBounds.origin.y
+        let flippedY = targetBounds.origin.y + targetBounds.size.height - relativeY
+        let eventPoint = CGPoint(x: point.x, y: flippedY)
+
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: eventPoint, mouseButton: .left) else { return false }
+        guard let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: eventPoint, mouseButton: .left) else { return false }
+
+        mouseDown.post(tap: .cghidEventTap)
+        mouseUp.post(tap: .cghidEventTap)
+        return true
+    }
     
     static func getMainScreenDimensions() -> WindowDimensions? {
         guard let screen = NSScreen.main else {
@@ -419,6 +452,19 @@ func main() {
             exit(1)
         }
         exit(0)
+    }
+
+    // Handle absolute click at global coordinates
+    if windowTitle.lowercased() == "--click-absolute" {
+        guard arguments.count >= 4,
+              let x = Double(arguments[2]),
+              let y = Double(arguments[3]) else {
+            print("{\"success\": false, \"error\": \"Expected usage: --click-absolute <x> <y>\"}")
+            exit(1)
+        }
+        let success = A11yExtractor.clickAt(point: CGPoint(x: x, y: y))
+        print("{\"success\": \(success)}")
+        exit(success ? 0 : 1)
     }
     
     // Find the window

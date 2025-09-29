@@ -124,12 +124,8 @@ async function main() {
         );
         console.log(`Test screenshot with multiple boxes saved to: ${annotatedPath}`);
       }
-      
-      // Uncomment to actually click it:
-      await clickElement(refreshButton, result.window);  // Pass window info for coordinate normalization
-      console.log("Clicked Refresh button!");
 
-      // Capture full display screenshot and draw a thick circle over click coordinates
+	  // Capture full display screenshot and draw a thick circle over click coordinates
       try {
         // Capture the specific display that contains the window
         const full = await getDisplayScreenshotForRect(result.window);
@@ -151,6 +147,10 @@ async function main() {
       } catch (e) {
         console.warn('Failed to create full display screenshot with click:', e);
       }
+      
+      // Uncomment to actually click it:
+      await clickElement(refreshButton, result.window);  // Pass window info for coordinate normalization
+      console.log("Clicked Refresh button!");
     } else {
       console.log("Refresh button not found");
     }

@@ -438,18 +438,23 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
     console.log(`Original coordinates: [${node.position[0]}, ${node.position[1]}]`);
     console.log(`Window info: position=[${windowInfo.x}, ${windowInfo.y}], size=[${windowInfo.width}, ${windowInfo.height}]`);
   }
-  
-  const script = `
-    tell application "System Events"
-      click at {${centerX}, ${centerY}}
-    end tell
-  `;
-  
-  try {
-    await execAsync(`osascript -e '${script}'`);
-  } catch (error: any) {
-    throw new Error(`Failed to click element: ${error.message}`);
-  }
+
+  const executable = await compileSwiftIfNeeded();
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, ["--click-absolute", String(centerX), String(centerY)]);
+    let stderr = "";
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute click: ${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Click command failed with code ${code}: ${stderr}`));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 export { 
