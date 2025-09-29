@@ -35,6 +35,17 @@ struct FullScreenshotResult: Codable {
 }
 
 class A11yExtractor {
+    static func generateWindowId(appName: String, windowTitle: String) -> String {
+        let cleanApp = appName.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+            .prefix(10)
+        
+        let cleanTitle = windowTitle.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+            .prefix(15)
+        
+        return "\(cleanApp)-\(cleanTitle)"
+    }
     static func extractTree(from element: AXUIElement, depth: Int = 0, maxDepth: Int = 15) -> A11yNode? {
         if depth > maxDepth {
             return nil
@@ -120,9 +131,9 @@ class A11yExtractor {
         return nil
     }
     
-    static func getAllWindows() -> [(appName: String, windowTitle: String, element: AXUIElement)] {
+    static func getAllWindows() -> [(appName: String, windowTitle: String, windowId: String, element: AXUIElement)] {
         let runningApps = NSWorkspace.shared.runningApplications
-        var allWindows: [(appName: String, windowTitle: String, element: AXUIElement)] = []
+        var allWindows: [(appName: String, windowTitle: String, windowId: String, element: AXUIElement)] = []
         
         for app in runningApps {
             guard app.activationPolicy == .regular else { continue }
@@ -136,7 +147,8 @@ class A11yExtractor {
                     if let title = getAttribute(window, attribute: kAXTitleAttribute) as? String {
                         // Skip empty titles and non-standard windows
                         if !title.isEmpty && title != "Item-0" {
-                            allWindows.append((appName: appName, windowTitle: title, element: window))
+                            let windowId = generateWindowId(appName: appName, windowTitle: title)
+                            allWindows.append((appName: appName, windowTitle: title, windowId: windowId, element: window))
                         }
                     }
                 }
@@ -335,6 +347,18 @@ class A11yExtractor {
         return nil
     }
     
+    static func findWindow(withId windowId: String) -> AXUIElement? {
+        let allWindows = getAllWindows()
+        
+        for window in allWindows {
+            if window.windowId == windowId {
+                return window.element
+            }
+        }
+        
+        return nil
+    }
+    
     static func focusWindow(_ element: AXUIElement) -> Bool {
         // First, try to raise the window using AXRaise action
         let raiseResult = AXUIElementPerformAction(element, kAXRaiseAction as CFString)
@@ -383,12 +407,26 @@ func main() {
     
     let windowTitle = arguments[1]
     
-    // Handle special case for focusing a window
+    // Handle special case for focusing a window by title
     if arguments.count > 2 && arguments[1].lowercased() == "--focus" {
         let focusWindowTitle = arguments[2]
         
         guard let window = A11yExtractor.findWindow(withTitle: focusWindowTitle) else {
             print("{\"success\": false, \"error\": \"Window with title containing '\(focusWindowTitle)' not found\"}")
+            exit(1)
+        }
+        
+        let focusSuccess = A11yExtractor.focusWindow(window)
+        print("{\"success\": \(focusSuccess)}")
+        exit(focusSuccess ? 0 : 1)
+    }
+    
+    // Handle special case for focusing a window by ID
+    if arguments.count > 2 && arguments[1].lowercased() == "--focus-id" {
+        let focusWindowId = arguments[2]
+        
+        guard let window = A11yExtractor.findWindow(withId: focusWindowId) else {
+            print("{\"success\": false, \"error\": \"Window with ID '\(focusWindowId)' not found\"}")
             exit(1)
         }
         
@@ -405,7 +443,8 @@ func main() {
         for window in allWindows {
             windowList.append([
                 "app": window.appName,
-                "title": window.windowTitle
+                "title": window.windowTitle,
+                "id": window.windowId
             ])
         }
         
@@ -504,7 +543,8 @@ func main() {
         for window in allWindows {
             availableWindows.append([
                 "app": window.appName,
-                "title": window.windowTitle
+                "title": window.windowTitle,
+                "id": window.windowId
             ])
         }
         

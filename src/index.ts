@@ -4,6 +4,8 @@ import {
   displayAvailableWindows,
   findElement,
   focusWindow,
+  searchWindows,
+  findBestWindow,
   type A11yResult,
   type WindowInfo,
   getImageDimensions,
