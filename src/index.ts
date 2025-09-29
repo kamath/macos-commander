@@ -11,6 +11,7 @@ import {
   getImageDimensions,
   drawMultipleBoundingBoxes,
   getFullDisplayScreenshot,
+  getDisplayScreenshotForRect,
   drawCircleAtScreenCoordinatesOnFullScreenshot
 } from "./lib/index.js";
 
@@ -130,7 +131,8 @@ async function main() {
 
       // Capture full display screenshot and draw a thick circle over click coordinates
       try {
-        const full = await getFullDisplayScreenshot();
+        // Capture the specific display that contains the window
+        const full = await getDisplayScreenshotForRect(result.window);
         const fullScreenshotFile = `data/full_screenshot.png`;
         if (full.screenshot && full.screenshot.length > 0) {
           const fullBuf = Buffer.from(full.screenshot, 'base64');

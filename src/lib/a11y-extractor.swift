@@ -203,6 +203,31 @@ class A11yExtractor {
         try? FileManager.default.removeItem(atPath: tempFile)
         return nil
     }
+
+    static func getDisplayBoundsContaining(point: CGPoint) -> WindowDimensions? {
+        var displayCount: UInt32 = 0
+        var err = CGGetActiveDisplayList(0, nil, &displayCount)
+        if err != .success || displayCount == 0 {
+            return nil
+        }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        err = CGGetActiveDisplayList(displayCount, &displays, &displayCount)
+        if err != .success {
+            return nil
+        }
+        for display in displays {
+            let bounds = CGDisplayBounds(display)
+            if bounds.contains(point) {
+                return WindowDimensions(
+                    x: Double(bounds.origin.x),
+                    y: Double(bounds.origin.y),
+                    width: Double(bounds.size.width),
+                    height: Double(bounds.size.height)
+                )
+            }
+        }
+        return nil
+    }
     
     static func getMainScreenDimensions() -> WindowDimensions? {
         guard let screen = NSScreen.main else {
@@ -345,8 +370,42 @@ func main() {
             print("{\"error\": \"Failed to capture full display screenshot\"}")
             exit(1)
         }
-        
+
         let result = FullScreenshotResult(display: display, screenshot: screenshotBase64)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+            let jsonData = try encoder.encode(result)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print(jsonString)
+            }
+        } catch {
+            print("{\"error\": \"Failed to encode full screenshot result: \(error)\"}")
+            exit(1)
+        }
+        exit(0)
+    }
+
+    // Handle full display screenshot for the display containing a given rect
+    if windowTitle.lowercased() == "--full-screenshot-for-rect" {
+        guard arguments.count >= 6,
+              let x = Double(arguments[2]),
+              let y = Double(arguments[3]),
+              let w = Double(arguments[4]),
+              let h = Double(arguments[5]) else {
+            print("{\"error\": \"Expected usage: --full-screenshot-for-rect <x> <y> <width> <height>\"}")
+            exit(1)
+        }
+        let center = CGPoint(x: x + w / 2.0, y: y + h / 2.0)
+        let displayBounds = A11yExtractor.getDisplayBoundsContaining(point: center) ?? WindowDimensions(x: 0, y: 0, width: w, height: h)
+        
+        guard let screenshotBase64 = A11yExtractor.captureWindowByCoordinatesAsBase64(dimensions: displayBounds) else {
+            print("{\"error\": \"Failed to capture display screenshot for rect\"}")
+            exit(1)
+        }
+        
+        let result = FullScreenshotResult(display: displayBounds, screenshot: screenshotBase64)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         

@@ -264,6 +264,43 @@ export async function getFullDisplayScreenshot(): Promise<FullScreenshotResult> 
   });
 }
 
+export async function getDisplayScreenshotForRect(rect: WindowDimensions): Promise<FullScreenshotResult> {
+  const executable = await compileSwiftIfNeeded();
+  const args = [
+    "--full-screenshot-for-rect",
+    String(rect.x),
+    String(rect.y),
+    String(rect.width),
+    String(rect.height)
+  ];
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args);
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (data) => { stdout += data.toString(); });
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}: ${stderr || stdout}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout) as FullScreenshotResult;
+        if ((result as any).error) {
+          reject(new Error((result as any).error));
+        } else {
+          resolve(result);
+        }
+      } catch (error) {
+        reject(new Error(`Failed to parse JSON output: ${error}`));
+      }
+    });
+  });
+}
+
 export function displayAvailableWindows(windows: WindowInfo[]) {
   console.log("\n📱 Available windows:");
   
