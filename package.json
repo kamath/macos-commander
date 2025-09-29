@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "bun run src/index.ts",
+    "act": "bun run src/index.ts",
     "build": "bun build src/index.ts --target=bun --outdir=dist",
     "list": "bun run src/index.ts --list"
   },
@@ -18,8 +19,11 @@
     "@types/node": "^20.0.0"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.17",
+    "ai": "^5.0.56",
     "node-mac-permissions": "^2.3.0",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "zod": "^4.1.11"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

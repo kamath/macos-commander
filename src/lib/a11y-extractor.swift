@@ -435,6 +435,76 @@ func main() {
         exit(focusSuccess ? 0 : 1)
     }
     
+    // Handle accessibility tree extraction by window ID
+    if arguments.count > 2 && arguments[1].lowercased() == "--window-id" {
+        let targetWindowId = arguments[2]
+        
+        guard let window = A11yExtractor.findWindow(withId: targetWindowId) else {
+            // Get all available windows to show suggestions
+            let allWindows = A11yExtractor.getAllWindows()
+            var availableWindows: [[String: String]] = []
+            
+            for window in allWindows {
+                availableWindows.append([
+                    "app": window.appName,
+                    "title": window.windowTitle,
+                    "id": window.windowId
+                ])
+            }
+            
+            let errorResponse = [
+                "error": "Window with ID '\(targetWindowId)' not found",
+                "availableWindows": availableWindows
+            ] as [String: Any]
+            
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: errorResponse, options: [.prettyPrinted, .sortedKeys])
+                if let jsonString = String(data: jsonData, encoding: .utf8) {
+                    print(jsonString)
+                }
+            } catch {
+                print("{\"error\": \"Window with ID '\(targetWindowId)' not found\"}")
+            }
+            exit(1)
+        }
+        
+        // Focus the window before processing
+        let focusSuccess = A11yExtractor.focusWindow(window)
+        if !focusSuccess {
+            // Continue anyway, but could log a warning in the result
+        }
+        
+        // Extract window dimensions
+        guard let windowDimensions = A11yExtractor.getWindowDimensions(from: window) else {
+            print("{\"error\": \"Failed to extract window dimensions\"}")
+            exit(1)
+        }
+        
+        // Capture screenshot as base64
+        let screenshotBase64 = A11yExtractor.captureWindowScreenshotAsBase64(from: window) ?? ""
+        
+        // Extract the accessibility tree
+        if let tree = A11yExtractor.extractTree(from: window) {
+            let result = A11yResult(window: windowDimensions, a11y: tree, screenshot: screenshotBase64)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            
+            do {
+                let jsonData = try encoder.encode(result)
+                if let jsonString = String(data: jsonData, encoding: .utf8) {
+                    print(jsonString)
+                }
+            } catch {
+                print("{\"error\": \"Failed to encode accessibility result: \(error)\"}")
+                exit(1)
+            }
+        } else {
+            print("{\"error\": \"Failed to extract accessibility tree\"}")
+            exit(1)
+        }
+        exit(0)
+    }
+    
     // Handle special case for listing all windows
     if windowTitle.lowercased() == "--list" || windowTitle.lowercased() == "list" {
         let allWindows = A11yExtractor.getAllWindows()
