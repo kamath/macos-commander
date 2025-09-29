@@ -323,7 +323,11 @@ export async function drawCircleAtScreenCoordinatesOnFullScreenshot(
   displayInfo: WindowDimensions,
   outputPath?: string,
   options: CircleOptions = {}
-): Promise<string> {
+): Promise<{
+	finalOutputPath: string;
+	cx: number;
+	cy: number;
+}> {
   const image = sharp(screenshotPath);
   const metadata = await image.metadata();
   if (!metadata.width || !metadata.height) {
@@ -379,5 +383,9 @@ export async function drawCircleAtScreenCoordinatesOnFullScreenshot(
 
   const finalOutputPath = outputPath || screenshotPath.replace(/\.(png|jpg|jpeg)$/i, '_with_circle.png');
   await result.toFile(finalOutputPath);
-  return finalOutputPath;
+  return {
+	finalOutputPath,
+	cx,
+	cy
+  };
 }

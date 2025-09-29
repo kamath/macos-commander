@@ -215,9 +215,20 @@ class A11yExtractor {
         if err != .success {
             return nil
         }
+        
+        // Debug: Print all display bounds and the point we're checking
+        FileHandle.standardError.write("DEBUG: Looking for display containing point: \(point)\n".data(using: .utf8)!)
+        
         for display in displays {
             let bounds = CGDisplayBounds(display)
-            if bounds.contains(point) {
+            FileHandle.standardError.write("DEBUG: Display bounds: \(bounds)\n".data(using: .utf8)!)
+            
+            // Check if point is within this display's bounds
+            // Note: macOS allows negative Y coordinates for displays above the primary
+            if point.x >= bounds.origin.x && 
+               point.x < bounds.origin.x + bounds.size.width &&
+               point.y >= bounds.origin.y && 
+               point.y < bounds.origin.y + bounds.size.height {
                 return WindowDimensions(
                     x: Double(bounds.origin.x),
                     y: Double(bounds.origin.y),
@@ -226,38 +237,55 @@ class A11yExtractor {
                 )
             }
         }
+        
+        // If no display contains the point exactly, find the closest one
+        var closestDisplay: CGDirectDisplayID? = nil
+        var closestDistance = Double.infinity
+        
+        for display in displays {
+            let bounds = CGDisplayBounds(display)
+            let centerX = bounds.origin.x + bounds.size.width / 2
+            let centerY = bounds.origin.y + bounds.size.height / 2
+            let distance = sqrt(pow(point.x - centerX, 2) + pow(point.y - centerY, 2))
+            if distance < closestDistance {
+                closestDistance = distance
+                closestDisplay = display
+            }
+        }
+        
+        if let display = closestDisplay {
+            let bounds = CGDisplayBounds(display)
+            return WindowDimensions(
+                x: Double(bounds.origin.x),
+                y: Double(bounds.origin.y),
+                width: Double(bounds.size.width),
+                height: Double(bounds.size.height)
+            )
+        }
+        
         return nil
     }
 
     static func clickAt(point: CGPoint) -> Bool {
-        var displayCount: UInt32 = 0
-        var err = CGGetActiveDisplayList(0, nil, &displayCount)
-        if err != .success || displayCount == 0 {
-            return false
-        }
-        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
-        err = CGGetActiveDisplayList(displayCount, &displays, &displayCount)
-        if err != .success {
-            return false
-        }
-        var targetBounds = CGDisplayBounds(CGMainDisplayID())
-        for display in displays {
-            let bounds = CGDisplayBounds(display)
-            if bounds.contains(point) {
-                targetBounds = bounds
-                break
-            }
-        }
-        // Convert from top-left origin (screen coords) to bottom-left origin (Quartz event coords) within the target display
-        let relativeY = point.y - targetBounds.origin.y
-        let flippedY = targetBounds.origin.y + targetBounds.size.height - relativeY
-        let eventPoint = CGPoint(x: point.x, y: flippedY)
-
+        // CGEvent uses a coordinate system where (0, 0) is the top-left of the primary display
+        // The coordinates provided from the accessibility API are already in this system
+        // We just need to use them directly without any transformation
+        
         guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
-        guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: eventPoint, mouseButton: .left) else { return false }
-        guard let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: eventPoint, mouseButton: .left) else { return false }
+        
+        // First move the mouse to the position to ensure we're at the right spot
+        guard let mouseMoved = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) else { return false }
+        mouseMoved.post(tap: .cghidEventTap)
+        
+        // Small delay to ensure mouse has moved
+        Thread.sleep(forTimeInterval: 0.01)
+        
+        // Now click at that position
+        guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left) else { return false }
+        guard let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left) else { return false }
 
         mouseDown.post(tap: .cghidEventTap)
+        Thread.sleep(forTimeInterval: 0.01) // Small delay between down and up
         mouseUp.post(tap: .cghidEventTap)
         return true
     }

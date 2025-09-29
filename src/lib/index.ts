@@ -430,18 +430,41 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
     throw new Error("Element must have position and size to be clickable");
   }
   
+  // Calculate the center point in global screen coordinates
   const centerX = node.position[0] + node.size[0] / 2;
   const centerY = node.position[1] + node.size[1] / 2;
   
-  console.log(`Clicking at normalized coordinates: [${centerX}, ${centerY}]`);
+  // If we have window info, we need to get the display that contains this window
+  // and apply the same coordinate transformation used for full display screenshots
+  let clickX = centerX;
+  let clickY = centerY;
+  
   if (windowInfo) {
-    console.log(`Original coordinates: [${node.position[0]}, ${node.position[1]}]`);
+    // Get the display that contains the window center
+    const windowCenterX = windowInfo.x + windowInfo.width / 2;
+    const windowCenterY = windowInfo.y + windowInfo.height / 2;
+    
+    // First get the display info for this window
+    try {
+      const displayInfo = await getDisplayScreenshotForRect(windowInfo);
+      if (displayInfo.display) {
+        // The coordinates are already in global screen space, which is what we need
+        // The Swift code will handle finding the right display and coordinate transformation
+        console.log(`Display info: position=[${displayInfo.display.x}, ${displayInfo.display.y}], size=[${displayInfo.display.width}, ${displayInfo.display.height}]`);
+      }
+    } catch (e) {
+      console.warn('Could not get display info, using coordinates as-is:', e);
+    }
+    
+    console.log(`Original element position: [${node.position[0]}, ${node.position[1]}]`);
     console.log(`Window info: position=[${windowInfo.x}, ${windowInfo.y}], size=[${windowInfo.width}, ${windowInfo.height}]`);
   }
+  
+  console.log(`Clicking at global screen coordinates: [${clickX}, ${clickY}]`);
 
   const executable = await compileSwiftIfNeeded();
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, ["--click-absolute", String(centerX), String(centerY)]);
+    const child = spawn(executable, ["--click-absolute", String(clickX), String(clickY)]);
     let stderr = "";
     child.stderr.on("data", (data) => { stderr += data.toString(); });
     child.on("error", (error) => {

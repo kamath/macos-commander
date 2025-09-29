@@ -135,7 +135,7 @@ async function main() {
           await Bun.write(fullScreenshotFile, fullBuf);
           const clickX = refreshButton.position![0] + refreshButton.size![0] / 2;
           const clickY = refreshButton.position![1] + refreshButton.size![1] / 2;
-          const annotatedFull = await drawCircleAtScreenCoordinatesOnFullScreenshot(
+          const {finalOutputPath: annotatedFull, cx, cy} = await drawCircleAtScreenCoordinatesOnFullScreenshot(
             fullScreenshotFile,
             [clickX, clickY],
             full.display,
@@ -143,6 +143,8 @@ async function main() {
             { color: 'yellow', thickness: 16, radius: 22, opacity: 1 }
           );
           console.log(`Full display screenshot with click saved to: ${annotatedFull}`);
+		  console.log(`Click coordinates in global screen: [${clickX}, ${clickY}]`);
+		  console.log(`Click coordinates within full display screenshot: [${cx}, ${cy}]`);
         }
       } catch (e) {
         console.warn('Failed to create full display screenshot with click:', e);
