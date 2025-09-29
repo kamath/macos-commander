@@ -34,26 +34,28 @@ export async function findElement(
   function serializeA11yTree(node: A11yNode, depth: number = 0): string {
     const indent = "  ".repeat(depth);
     const properties = [];
-    
+
     if (node.role) properties.push(`role: ${node.role}`);
     if (node.title) properties.push(`title: "${node.title}"`);
     if (node.description) properties.push(`description: "${node.description}"`);
     if (node.value) properties.push(`value: "${node.value}"`);
-    if (node.roleDescription) properties.push(`roleDescription: "${node.roleDescription}"`);
+    if (node.roleDescription)
+      properties.push(`roleDescription: "${node.roleDescription}"`);
     if (node.identifier) properties.push(`identifier: "${node.identifier}"`);
     if (node.enabled !== undefined) properties.push(`enabled: ${node.enabled}`);
     if (node.focused !== undefined) properties.push(`focused: ${node.focused}`);
-    if (node.selected !== undefined) properties.push(`selected: ${node.selected}`);
-    
+    if (node.selected !== undefined)
+      properties.push(`selected: ${node.selected}`);
+
     const propsStr = properties.length > 0 ? ` (${properties.join(", ")})` : "";
     let result = `${indent}Node ID: ${node.id}${propsStr}\n`;
-    
+
     if (node.children && node.children.length > 0) {
       for (const child of node.children) {
         result += serializeA11yTree(child, depth + 1);
       }
     }
-    
+
     return result;
   }
 
@@ -95,7 +97,7 @@ Return only the node ID of the best matching element.
 export async function act(
   prompt: string,
   model: LanguageModel,
-  debug: boolean = false
+  debug: boolean = true
 ): Promise<ActResponse> {
   // Get the list of available windows with their IDs
   const windowList = await listAvailableWindows();
@@ -217,9 +219,9 @@ export async function act(
 }
 
 async function actClick(
-  result: A11yResult, 
-  screenshotFile: string, 
-  prompt: string, 
+  result: A11yResult,
+  screenshotFile: string,
+  prompt: string,
   model: LanguageModel
 ) {
   console.log(`\nFinding element for: ${prompt}...`);
