@@ -440,10 +440,6 @@ export async function clickElement(node: A11yNode, windowInfo?: WindowDimensions
   let clickY = centerY;
   
   if (windowInfo) {
-    // Get the display that contains the window center
-    const windowCenterX = windowInfo.x + windowInfo.width / 2;
-    const windowCenterY = windowInfo.y + windowInfo.height / 2;
-    
     // First get the display info for this window
     try {
       const displayInfo = await getDisplayScreenshotForRect(windowInfo);
