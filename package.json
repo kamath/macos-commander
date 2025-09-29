@@ -18,6 +18,7 @@
     "@types/node": "^20.0.0"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.17",
     "ai": "^5.0.56",
     "node-mac-permissions": "^2.3.0",
     "sharp": "^0.34.4",
