@@ -44,6 +44,7 @@ export interface FullScreenshotResult {
 export interface WindowInfo {
   app: string;
   title: string;
+  id: string;
 }
 
 export interface WindowListResponse {
@@ -314,19 +315,21 @@ export function displayAvailableWindows(windows: WindowInfo[]) {
     if (!acc[window.app]) {
       acc[window.app] = [];
     }
-    acc[window.app].push(window.title);
+    acc[window.app].push({ title: window.title, id: window.id });
     return acc;
-  }, {} as Record<string, string[]>);
+  }, {} as Record<string, Array<{ title: string, id: string }>>);
   
-  for (const [appName, windowTitles] of Object.entries(windowsByApp)) {
+  for (const [appName, windowInfos] of Object.entries(windowsByApp)) {
     console.log(`\n  📦 ${appName}:`);
-    for (const title of windowTitles) {
-      console.log(`    • "${title}"`);
+    for (const info of windowInfos) {
+      console.log(`    • "${info.title}" (ID: ${info.id})`);
     }
   }
   
-  console.log("\n💡 You can use any part of the window title to search.");
-  console.log("   Example: bun run src/index.ts Safari");
+  console.log("\n💡 You can search by app name + window title, or use window ID.");
+  console.log("   Examples:");
+  console.log("     bun run src/index.ts 'edge commander'  # Search by app+title");
+  console.log("     bun run src/index.ts safari-main       # Use window ID");
 }
 
 function calculateMatchScore(node: A11yNode, searchCriteria: Partial<A11yNode>): number {
@@ -393,7 +396,153 @@ export function findElement(tree: A11yNode, searchCriteria: Partial<A11yNode>): 
   return matches[0];
 }
 
-export async function focusWindow(windowTitle: string): Promise<boolean> {
+function generateWindowId(appName: string, windowTitle: string): string {
+  const cleanApp = appName.toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 10);
+  
+  const cleanTitle = windowTitle.toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 15);
+  
+  return `${cleanApp}-${cleanTitle}`;
+}
+
+function calculateWindowSimilarity(query: string, window: WindowInfo): number {
+  const queryLower = query.toLowerCase();
+  const appLower = window.app.toLowerCase();
+  const titleLower = window.title.toLowerCase();
+  const combinedLower = `${appLower} ${titleLower}`;
+  
+  // Direct ID match gets highest score
+  if (window.id === queryLower) {
+    return 1000;
+  }
+  
+  let score = 0;
+  
+  // Exact matches
+  if (appLower === queryLower || titleLower === queryLower) {
+    score += 100;
+  }
+  
+  // Combined app + title contains query
+  if (combinedLower.includes(queryLower)) {
+    score += 50;
+  }
+  
+  // App or title contains query
+  if (appLower.includes(queryLower)) {
+    score += 30;
+  }
+  if (titleLower.includes(queryLower)) {
+    score += 30;
+  }
+  
+  // Fuzzy matching - check for partial word matches
+  const queryWords = queryLower.split(/\s+/);
+  const combinedWords = combinedLower.split(/\s+/);
+  
+  for (const queryWord of queryWords) {
+    if (queryWord.length < 2) continue;
+    
+    for (const combinedWord of combinedWords) {
+      if (combinedWord.includes(queryWord)) {
+        score += 10;
+      }
+      // Partial substring match
+      if (queryWord.length >= 3) {
+        for (let i = 0; i <= queryWord.length - 3; i++) {
+          const substring = queryWord.substring(i, i + 3);
+          if (combinedWord.includes(substring)) {
+            score += 2;
+          }
+        }
+      }
+    }
+  }
+  
+  return score;
+}
+
+export function searchWindows(query: string, windows: WindowInfo[]): WindowInfo[] {
+  const windowsWithIds = windows.map(w => ({
+    ...w,
+    id: w.id || generateWindowId(w.app, w.title)
+  }));
+  
+  const scored = windowsWithIds.map(window => ({
+    window,
+    score: calculateWindowSimilarity(query, window)
+  }));
+  
+  return scored
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.window);
+}
+
+export function findBestWindow(query: string, windows: WindowInfo[]): WindowInfo | null {
+  const matches = searchWindows(query, windows);
+  return matches.length > 0 ? matches[0] : null;
+}
+
+export async function focusWindow(windowQuery: string): Promise<boolean> {
+  // First try to get window list and search for the best match
+  try {
+    const windowList = await listAvailableWindows();
+    const bestMatch = findBestWindow(windowQuery, windowList.availableWindows);
+    
+    if (bestMatch) {
+      console.log(`Found window: "${bestMatch.title}" in ${bestMatch.app} (ID: ${bestMatch.id})`);
+      return focusWindowById(bestMatch.id);
+    }
+  } catch (error) {
+    console.warn("Failed to search windows, falling back to direct title match:", error);
+  }
+  
+  // Fallback to original behavior
+  return focusWindowByTitle(windowQuery);
+}
+
+export async function focusWindowById(windowId: string): Promise<boolean> {
+  const executable = await compileSwiftIfNeeded();
+  
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ["--focus-id", windowId]);
+    
+    let stdout = "";
+    let stderr = "";
+    
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on("error", (error) => {
+      reject(new Error(`Failed to execute accessibility extractor: ${error.message}`));
+    });
+    
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve(false);
+        return;
+      }
+      
+      try {
+        const result = JSON.parse(stdout);
+        resolve(result.success === true);
+      } catch (error) {
+        resolve(false);
+      }
+    });
+  });
+}
+
+export async function focusWindowByTitle(windowTitle: string): Promise<boolean> {
   const executable = await compileSwiftIfNeeded();
   
   return new Promise((resolve, reject) => {
@@ -416,7 +565,7 @@ export async function focusWindow(windowTitle: string): Promise<boolean> {
     
     child.on("close", (code) => {
       if (code !== 0) {
-        resolve(false); // Focus failed, but don't throw error
+        resolve(false);
         return;
       }
       
@@ -424,7 +573,7 @@ export async function focusWindow(windowTitle: string): Promise<boolean> {
         const result = JSON.parse(stdout);
         resolve(result.success === true);
       } catch (error) {
-        resolve(false); // Parsing failed, assume focus failed
+        resolve(false);
       }
     });
   });
